@@ -9,6 +9,7 @@ import sys
 from typing import Any
 
 from .bank import CertifiedSkillBank, load_draft, load_skill
+from .context import canonicalize_context, load_json as load_context_json, write_json
 from .draft import SkillDraftBuilder
 from .gate import PromotionGate
 from .ledger import EvidenceLedger, load_jsonl_records
@@ -36,6 +37,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_validate = sub.add_parser("validate", help="validate evidence, drafts, or skill JSON")
     p_validate.add_argument("path")
+
+    p_compile_context = sub.add_parser(
+        "compile-context",
+        help="canonicalize current-scene context JSON for stable readout ids",
+    )
+    p_compile_context.add_argument("context")
+    p_compile_context.add_argument("--out", help="write canonical context JSON to this path")
+    p_compile_context.add_argument(
+        "--rewrite-slots",
+        action="store_true",
+        help="replace supplied object slot ids with deterministic family/class ids",
+    )
 
     p_ingest = sub.add_parser("ingest", help="ingest evidence JSONL into an append-only ledger")
     p_ingest.add_argument("evidence_jsonl")
@@ -125,6 +138,24 @@ def _validate_json_object(payload: Any) -> None:
         parse_subskill_readout(payload)
     elif {"readout_id", "success", "observed_delta_belief"}.issubset(payload):
         OutcomeRecord.from_dict(payload)
+    elif _looks_like_context(payload):
+        canonicalize_context(payload)
+
+
+def _looks_like_context(payload: dict[str, Any]) -> bool:
+    return bool(
+        {"object_slots", "objects", "object_bindings", "relation_evidence", "schema", "provenance"}
+        & set(payload)
+    )
+
+
+def cmd_compile_context(context_path: str, out_path: str | None, rewrite_slots: bool) -> int:
+    payload = load_context_json(context_path)
+    canonical = canonicalize_context(payload, rewrite_slots=rewrite_slots)
+    if out_path:
+        write_json(out_path, canonical)
+    print(dumps_pretty(canonical), end="")
+    return 0
 
 
 def cmd_ingest(evidence_jsonl: str, ledger_path: str) -> int:
@@ -256,6 +287,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "validate":
             return cmd_validate(args.path)
+        if args.command == "compile-context":
+            return cmd_compile_context(args.context, args.out, args.rewrite_slots)
         if args.command == "ingest":
             return cmd_ingest(args.evidence_jsonl, args.ledger)
         if args.command == "draft":

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from connor_writer.bank import CertifiedSkillBank
+from connor_writer.context import canonicalize_context
 from connor_writer.draft import SkillDraftBuilder
 from connor_writer.gate import PromotionGate
 from connor_writer.ledger import EvidenceLedger, load_jsonl_records
@@ -45,6 +46,83 @@ class LifecycleTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(SchemaError, "forbidden"):
             EvidenceRecord.from_dict(payload)
+
+    def test_context_canonicalization_is_stable(self) -> None:
+        first = {
+            "object_slots": [
+                {
+                    "slot": "obj_case_1",
+                    "label": "Huawei earbud case",
+                    "family": "goal_object",
+                },
+                {
+                    "slot": "obj_bottle_1",
+                    "label": "amber pump bottle",
+                    "family": "context_object",
+                },
+            ],
+            "object_bindings": {
+                "target": {"slot": "obj_case_1", "label": "Huawei earbud case"},
+                "anchor": {"slot": "obj_bottle_1", "label": "amber pump bottle"},
+            },
+            "schema": {
+                "task": "tidy desktop by preparing a clear approach",
+                "candidate_skill": "ClearApproach",
+            },
+            "provenance": {
+                "source": "agent_visual_observation_from_user_message",
+                "relation_evidence_policy": "do not infer active relation from the photo",
+            },
+            "relation_evidence": [
+                {
+                    "target": "obj_case_1",
+                    "anchor": "obj_bottle_1",
+                    "relation_type": "blocks",
+                    "status": "observed",
+                }
+            ],
+        }
+        second = {
+            "provenance": {"source": "agent_visual_observation_from_user_message"},
+            "schema": {
+                "candidate_skill": "ClearApproach",
+                "task": "tidy desktop by preparing a clear approach",
+            },
+            "relation_evidence": [
+                {
+                    "relation_type": "blocks",
+                    "anchor": "obj_bottle_1",
+                    "target": "obj_case_1",
+                    "status": "observed",
+                }
+            ],
+            "object_bindings": {
+                "anchor": {"slot": "obj_bottle_1", "label": "amber pump bottle"},
+                "target": {"slot": "obj_case_1", "label": "Huawei earbud case"},
+            },
+            "object_slots": list(reversed(first["object_slots"])),
+        }
+
+        canonical_first = canonicalize_context(first)
+        canonical_second = canonicalize_context(second)
+
+        self.assertEqual(canonical_first, canonical_second)
+        self.assertNotIn("candidate_skill", canonical_first["schema"])
+        self.assertNotIn("provenance", canonical_first)
+        self.assertTrue(canonical_first["relation_evidence"][0]["evidence_id"].startswith("rel_"))
+        self.assertEqual(
+            canonical_first["object_bindings"]["anchor"]["family"],
+            "context_object",
+        )
+        rewritten = canonicalize_context(first, rewrite_slots=True)
+        self.assertEqual(
+            rewritten["object_bindings"]["anchor"]["slot"],
+            "context_object.amber_pump_bottle_1",
+        )
+        self.assertEqual(
+            rewritten["relation_evidence"][0]["anchor"],
+            "context_object.amber_pump_bottle_1",
+        )
 
     def test_ledger_append_is_idempotent_and_stable(self) -> None:
         with self.tempdir() as tmp:
@@ -349,6 +427,12 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(payload["status"], "active")
             self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
             self.assertEqual(payload["geometric_readout"]["relation_type"], "blocks")
+
+            compiled = self.run_cli("compile-context", str(SAMPLE_CONTEXT))
+            compiled_payload = json.loads(compiled.stdout)
+            self.assertIn("relation_evidence", compiled_payload)
+            self.assertEqual(compiled_payload["relation_evidence"][0]["status"], "observed")
+            self.assertNotIn("active_relation", compiled_payload["schema"])
 
 
 if __name__ == "__main__":

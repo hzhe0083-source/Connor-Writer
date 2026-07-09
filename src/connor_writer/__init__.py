@@ -1,6 +1,7 @@
 """Connor-Writer deterministic skill distillation lifecycle."""
 
 from .bank import CertifiedSkillBank
+from .context import canonicalize_context
 from .draft import SkillDraftBuilder
 from .gate import PromotionGate
 from .ledger import EvidenceLedger
@@ -37,5 +38,6 @@ __all__ = [
     "SubskillReadout",
     "SkillReadoutBuilder",
     "ReadoutLedger",
+    "canonicalize_context",
     "evidence_from_outcome",
 ]

@@ -57,12 +57,13 @@ Run from the repository root:
 
 ```bash
 PYTHONPATH=src python3 -m connor_writer validate evidence/
+PYTHONPATH=src python3 -m connor_writer compile-context examples/context.json --out /tmp/connor-context.json
 PYTHONPATH=src python3 -m connor_writer ingest evidence/sample-events.jsonl --ledger ledger/
 PYTHONPATH=src python3 -m connor_writer draft --ledger ledger/ --drafts drafts/
 PYTHONPATH=src python3 -m connor_writer promote drafts/ --bank skills/
 PYTHONPATH=src python3 -m connor_writer list --bank skills/
 PYTHONPATH=src python3 -m connor_writer show skills/clearapproach.skill.json
-PYTHONPATH=src python3 -m connor_writer readout skills/clearapproach.skill.json --context examples/context.json --readouts readouts/
+PYTHONPATH=src python3 -m connor_writer readout skills/clearapproach.skill.json --context /tmp/connor-context.json --readouts readouts/
 PYTHONPATH=src python3 -m connor_writer outcome readouts/ --readout-id <ro_id> --skill skills/clearapproach.skill.json --ledger ledger/ --outcomes outcomes/ --success true --observed '{"progress_delta": 0.8}' --executed '{}' --labels '{}'
 PYTHONPATH=src python3 -m connor_writer audit skills/clearapproach.skill.json
 ```
@@ -154,6 +155,33 @@ Active readouts require explicit current-scene relation evidence:
 ```
 
 If relation evidence is absent, mismatched, or lacks a source, readout returns `NullSubskillReadout`. This prevents a manually guessed binding from becoming an active subskill.
+
+## Context Canonicalization
+
+Unstable agent-written context should be compiled before readout:
+
+```bash
+PYTHONPATH=src python3 -m connor_writer compile-context raw-context.json --out canonical-context.json
+PYTHONPATH=src python3 -m connor_writer readout skills/clearapproach.skill.json --context canonical-context.json
+```
+
+The context compiler is deterministic and schema-first:
+
+- accepts `object_slots` or `objects`, then emits sorted `objects`
+- normalizes `object_bindings`
+- requires explicit `relation_evidence` for active readouts
+- fills relation `source` from `schema.source` or `provenance.source` when present
+- generates stable relation `evidence_id`
+- drops free-form policy fields such as `candidate_skill` and `relation_evidence_policy`
+- rejects raw images, image paths, crops, features, absolute coordinates, and trajectories
+
+If upstream object slot names are unstable, use:
+
+```bash
+PYTHONPATH=src python3 -m connor_writer compile-context raw-context.json --rewrite-slots --out canonical-context.json
+```
+
+This rewrites object slots into deterministic family/class ids and remaps bindings and relation evidence accordingly.
 
 This separation is intentional:
 

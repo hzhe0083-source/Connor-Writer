@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .bank import load_skill
+from .context import canonicalize_context
 from .families import effect_type_from_contract
 from .schema import (
     ActiveSubskillReadout,
@@ -75,8 +76,7 @@ class SkillReadoutBuilder:
             skill = load_skill(skill)
         if skill.state != STATE_CERTIFIED:
             raise SchemaError("only certified skills can produce runtime readouts")
-        context = context or {}
-        ensure_no_forbidden_payloads(context)
+        context = canonicalize_context(context or {})
         context_sig = context_signature(context)
         read_time = now or utc_now()
         trust = trust_score(skill.P, now=read_time)
@@ -201,4 +201,4 @@ def load_context(path: str | Path | None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise SchemaError("context must be a JSON object")
     ensure_no_forbidden_payloads(payload)
-    return payload
+    return canonicalize_context(payload)
