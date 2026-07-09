@@ -2,7 +2,7 @@
 
 Connor-Writer v1 is a deterministic skill distillation and certification lifecycle for the Connor Certified Skill Bank.
 
-It is not a neural self-improvement system, not an LLM judge, and not a memory logger. It turns validated execution traces into certified branch-level skill operators that can emit current-scene DCEA-groundable subskill readouts.
+It is not a neural self-improvement system, not an LLM judge, and not a memory logger. It turns validated execution traces into certified branch-level skill operators. The long-term skill files are interface-agnostic; current-scene subskill readouts are generated only at read time.
 
 ```text
 Execution Trace
@@ -25,13 +25,10 @@ Promotion gates decide runtime eligibility.
 ## Certified Skill
 
 ```text
-CertifiedSkill S_k = (C_k, G_k, O_k, P_k, Z_k)
+CertifiedSkill S_k = (C_k, O_k, P_k, Z_k)
 
 C_k: contract
   roles / preconditions / intended effect / stop / safety / invariance
-
-G_k: DCEA grounding interface
-  relation signature / activation predicate / roles / grounding requirements / relation kernel / null policy
 
 O_k: option-effect operator
   applicability -> relative option prior -> expected belief change
@@ -47,7 +44,6 @@ Connor-0 notation mapping:
 
 ```text
 C_k = tau_k
-G_k = DCEA grounding interface
 O_k = Omega_k
 P_k = eta_k
 Z_k = promotion certificate
@@ -95,11 +91,11 @@ A draft is certified only when all deterministic checks pass:
 
 ## Subskill Readout
 
-Certified skills are not passed to DCEA as whole long-term records. At read time, a certified skill is resolved against the current object bindings and emits either:
+Certified skills are not subskills, and they are not tied to any one downstream module. At read time, a certified skill is resolved against the current object bindings and emits either:
 
 ```text
 ActiveSubskillReadout
-  dcea_input
+  geometric_readout
   semantic_token
   option_prior
   expected_belief_effect
@@ -114,11 +110,11 @@ NullSubskillReadout
   audit_pointer
 ```
 
-The active readout preserves the two functional surfaces of Connor-0 long-term memory:
+The active readout is the runtime object that can replace Connor-0 long-term memory rows:
 
 ```text
-dcea_input              -> DCEA geometric route and transient spatial evidence H_t
-semantic_token          -> VLM proposer / BSWM semantic route U^S_t
+geometric_readout       -> current-scene relation/geometric evidence surface
+semantic_token          -> compact semantic memory-token surface
 option_prior            -> schema compiler relative-parameter prior
 expected_belief_effect  -> BSWM conditioning/check
 trust_score             -> posterior/freshness/grounding/contradiction summary
@@ -127,6 +123,16 @@ audit_pointer           -> skill version, promotion record, and evidence traceab
 ```
 
 If required roles cannot be grounded in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence.
+
+This separation is intentional:
+
+```text
+CertifiedSkill file:
+  durable, downstream-agnostic operator = (C, O, P, Z)
+
+SubskillReadout:
+  transient current-scene projection generated from the skill and context
+```
 
 ## Non-goals for v1
 

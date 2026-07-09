@@ -123,11 +123,9 @@ class PromotionGate:
     def _readout_contract_valid(self, draft: SkillDraft) -> bool:
         if not draft.C.get("intended_effect"):
             return False
-        if not draft.G.get("relation_type"):
+        if not isinstance(draft.C.get("roles"), dict):
             return False
-        if not isinstance(draft.G.get("relation_kernel"), dict):
-            return False
-        if not draft.G.get("grounding_requirements"):
+        if not draft.C.get("preconditions"):
             return False
         if not draft.O.get("option_family"):
             return False

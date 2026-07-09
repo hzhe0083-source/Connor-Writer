@@ -6,7 +6,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .families import build_grounding_interface
 from .ledger import EvidenceLedger
 from .schema import (
     EvidenceRecord,
@@ -221,7 +220,6 @@ class SkillDraftBuilder:
             contract = merge_contract(group)
             progress_values = [infer_progress(record) for record in group if is_execution_evidence(record)]
             operator = merge_operator(group, progress_values)
-            grounding = build_grounding_interface(contract, operator)
             posterior = build_posterior(group)
             has_execution = posterior["support_n"] > 0
             state = STATE_DRAFT if has_execution else STATE_SEED
@@ -246,7 +244,6 @@ class SkillDraftBuilder:
                 "key": key,
                 "state": state,
                 "C": contract,
-                "G": grounding,
                 "O": operator,
                 "P": posterior,
                 "Z": certificate,

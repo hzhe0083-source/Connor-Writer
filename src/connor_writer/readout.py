@@ -8,7 +8,6 @@ from typing import Any
 
 from .bank import load_skill
 from .families import effect_type_from_contract
-from .grounding import audit_pointer, build_dcea_input, resolve_binding
 from .schema import (
     ActiveSubskillReadout,
     CertifiedSkill,
@@ -20,10 +19,11 @@ from .schema import (
     utc_now,
 )
 from .scoring import trust_score
+from .subskill import audit_pointer, build_geometric_signal, resolve_binding, surface_for_skill
 
 
 class SkillReadoutBuilder:
-    """Expose certified skill surfaces for DCEA, VLM, BSWM, and Q selection."""
+    """Project a certified skill into a current-scene subskill readout."""
 
     def build(
         self,
@@ -51,23 +51,24 @@ class SkillReadoutBuilder:
                 audit_pointer=audit,
             )
 
+        surface = surface_for_skill(skill)
         option_prior = {
             "option_family": skill.O.get("option_family"),
             "relative_frame": skill.O.get("relative_frame"),
             "parameter_prior": skill.O.get("parameter_prior", {}),
         }
-        dcea_input = build_dcea_input(skill, binding, context=context, now=read_time)
+        geometric_readout = build_geometric_signal(skill, binding, context=context, now=read_time)
         semantic_token = SemanticSkillToken(
             skill_id=skill.id,
             skill_name=str(skill.C.get("name", "")),
-            relation_type=str(skill.G.get("relation_type", "unknown")),
+            relation_type=str(surface.get("relation_type", "unknown")),
             option_family=str(skill.O.get("option_family", "unknown_option")),
             effect_type=effect_type_from_contract(skill.C),
             binding=binding,
             grounding_features={
-                "activation_score": dcea_input.activation_score,
-                "relation_kernel": skill.G.get("relation_kernel", {}),
-                "geometric_feature_reducer": skill.G.get("geometric_feature_reducer", []),
+                "activation_score": geometric_readout.activation_score,
+                "relation_kernel": surface.get("relation_kernel", {}),
+                "geometric_feature_reducer": surface.get("geometric_feature_reducer", []),
             },
             posterior_summary={
                 "support_n": skill.P.get("support_n", 0),
@@ -95,9 +96,9 @@ class SkillReadoutBuilder:
             key=skill.key,
             status="active",
             binding=binding,
-            relation_type=str(skill.G.get("relation_type", "unknown")),
-            activation_predicate=str(skill.G.get("activation_predicate", "")),
-            dcea_input=dcea_input.to_dict(),
+            relation_type=str(surface.get("relation_type", "unknown")),
+            activation_predicate=str(surface.get("activation_predicate", "")),
+            geometric_readout=geometric_readout.to_dict(),
             semantic_token=semantic_token.to_dict(),
             option_prior=option_prior,
             expected_belief_effect=skill.O.get("expected_belief_effect", {}),

@@ -1,4 +1,4 @@
-"""Known skill-family specs for DCEA-groundable certified skills."""
+"""Known option-family profiles for runtime subskill readouts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ FAMILY_SPECS: dict[str, dict[str, Any]] = {
         "relation_kernel": {
             "name": "boundary_contact_away_from_corridor",
             "inputs": ["anchor_mask", "target_region", "approach_corridor"],
-            "output": "anchor-relative relation-spatial evidence",
+            "output": "anchor-relative relation evidence",
         },
         "geometric_feature_reducer": [
             "peak",
@@ -68,7 +68,7 @@ def effect_type_from_contract(contract: dict[str, Any]) -> str:
     return effect.split(";")[0].strip().lower().replace(" ", "_")
 
 
-def build_grounding_interface(contract: dict[str, Any], operator: dict[str, Any]) -> dict[str, Any]:
+def build_subskill_surface(contract: dict[str, Any], operator: dict[str, Any]) -> dict[str, Any]:
     option_family = str(operator.get("option_family") or "unknown_option")
     spec = FAMILY_SPECS.get(
         option_family,
@@ -76,7 +76,7 @@ def build_grounding_interface(contract: dict[str, Any], operator: dict[str, Any]
             "relation_kernel": {
                 "name": "generic_anchor_target_relation",
                 "inputs": ["anchor_mask", "target_mask"],
-                "output": "generic relation-spatial evidence",
+                "output": "generic relation evidence",
             },
             "geometric_feature_reducer": ["peak", "centroid", "covariance"],
             "null_grounding_policy": "null_if_required_roles_ungrounded",
@@ -104,6 +104,5 @@ def build_grounding_interface(contract: dict[str, Any], operator: dict[str, Any]
         "relation_kernel": spec["relation_kernel"],
         "geometric_feature_reducer": spec["geometric_feature_reducer"],
         "null_grounding_policy": spec["null_grounding_policy"],
-        "notation": {"G_k": "DCEA_grounding_interface"},
+        "notation": {"surface": "runtime_subskill_projection"},
     }
-

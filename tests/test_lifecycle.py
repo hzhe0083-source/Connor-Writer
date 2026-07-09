@@ -61,9 +61,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(set(names), {"AlignAndRelease", "ClearApproach", "RecoverGrasp"})
             clear = names["ClearApproach"]
             self.assertEqual(clear.state, STATE_DRAFT)
-            self.assertIn("G", clear.to_dict())
-            self.assertEqual(clear.G["relation_type"], "blocks")
-            self.assertIn("relation_kernel", clear.G)
+            self.assertNotIn("G", clear.to_dict())
             self.assertEqual(clear.P["support_n"], 3)
             self.assertEqual(len(clear.Z["evidence_ids"]), 4)
 
@@ -133,7 +131,7 @@ class LifecycleTests(unittest.TestCase):
                     "binding",
                     "relation_type",
                     "activation_predicate",
-                    "dcea_input",
+                    "geometric_readout",
                     "semantic_token",
                     "option_prior",
                     "expected_belief_effect",
@@ -147,10 +145,10 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(payload["semantic_token"]["skill_name"], "ClearApproach")
             self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
             self.assertEqual(payload["binding"]["anchor"]["label"], "tray")
-            self.assertEqual(payload["dcea_input"]["anchor_slot"], "obj_3")
-            self.assertEqual(payload["dcea_input"]["target_slot"], "obj_7")
-            self.assertEqual(payload["dcea_input"]["relation_type"], "blocks")
-            self.assertIn("relation_kernel", payload["dcea_input"])
+            self.assertEqual(payload["geometric_readout"]["anchor_slot"], "obj_3")
+            self.assertEqual(payload["geometric_readout"]["target_slot"], "obj_7")
+            self.assertEqual(payload["geometric_readout"]["relation_type"], "blocks")
+            self.assertIn("relation_kernel", payload["geometric_readout"])
             self.assertEqual(payload["option_prior"]["option_family"], "displace_context")
             self.assertGreater(payload["expected_belief_effect"]["progress_delta"], 0)
             self.assertGreater(payload["trust_score"], 0)
@@ -225,7 +223,7 @@ class LifecycleTests(unittest.TestCase):
             payload = json.loads(readout.stdout)
             self.assertEqual(payload["status"], "active")
             self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
-            self.assertEqual(payload["dcea_input"]["relation_type"], "blocks")
+            self.assertEqual(payload["geometric_readout"]["relation_type"], "blocks")
 
 
 if __name__ == "__main__":

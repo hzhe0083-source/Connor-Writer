@@ -1,10 +1,11 @@
-"""Current-scene grounding helpers for certified skill readout."""
+"""Current-scene helpers for certified skill to subskill readout projection."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .schema import CertifiedSkill, DCEAInput
+from .families import build_subskill_surface
+from .schema import CertifiedSkill, GeometricSubskillSignal
 from .scoring import trust_score
 
 
@@ -18,13 +19,18 @@ def audit_pointer(skill: CertifiedSkill) -> dict[str, Any]:
     }
 
 
+def surface_for_skill(skill: CertifiedSkill) -> dict[str, Any]:
+    return build_subskill_surface(skill.C, skill.O)
+
+
 def resolve_binding(skill: CertifiedSkill, context: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     bindings = context.get("object_bindings", {})
     if not isinstance(bindings, dict):
         return {}, "context.object_bindings must be an object"
 
-    anchor_role = str(skill.G.get("anchor_role", "anchor"))
-    target_role = str(skill.G.get("target_role", "target"))
+    surface = surface_for_skill(skill)
+    anchor_role = str(surface.get("anchor_role", "anchor"))
+    target_role = str(surface.get("target_role", "target"))
     anchor = bindings.get(anchor_role) or bindings.get("anchor")
     target = bindings.get(target_role) or bindings.get("target")
     binding = {
@@ -56,24 +62,25 @@ def activation_score(skill: CertifiedSkill, binding: dict[str, Any], trust: floa
     return max(0.0, min(1.0, trust * p_ground))
 
 
-def build_dcea_input(
+def build_geometric_signal(
     skill: CertifiedSkill,
     binding: dict[str, Any],
     context: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DCEAInput:
+) -> GeometricSubskillSignal:
     context = context or {}
     trust = trust_score(skill.P, now=now)
     activation = activation_score(skill, binding, trust)
     anchor = binding.get("anchor") if isinstance(binding.get("anchor"), dict) else {}
     target = binding.get("target") if isinstance(binding.get("target"), dict) else {}
-    return DCEAInput(
-        relation_type=str(skill.G.get("relation_type", "unknown")),
+    surface = surface_for_skill(skill)
+    return GeometricSubskillSignal(
+        relation_type=str(surface.get("relation_type", "unknown")),
         anchor_slot=anchor.get("slot"),
         target_slot=target.get("slot"),
         activation_score=activation,
-        relation_kernel=skill.G.get("relation_kernel", {}),
-        grounding_requirements=skill.G.get("grounding_requirements", []),
+        relation_kernel=surface.get("relation_kernel", {}),
+        grounding_requirements=surface.get("grounding_requirements", []),
         confidence_features={
             "p_ground_anchor": float(anchor.get("grounding_confidence", 0.0)),
             "p_ground_target": float(target.get("grounding_confidence", 0.0)),
@@ -89,4 +96,3 @@ def build_dcea_input(
         expected_belief_effect=skill.O.get("expected_belief_effect", {}),
         audit_pointer=audit_pointer(skill),
     )
-

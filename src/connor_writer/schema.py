@@ -197,7 +197,6 @@ class SkillDraft:
     key: str
     state: str
     C: dict[str, Any]
-    G: dict[str, Any]
     O: dict[str, Any]
     P: dict[str, Any]
     Z: dict[str, Any]
@@ -207,7 +206,7 @@ class SkillDraft:
         ensure_no_forbidden_payloads(payload)
         if payload.get("state") not in VALID_STATES:
             raise SchemaError(f"invalid draft state: {payload.get('state')}")
-        for name in ("C", "G", "O", "P", "Z"):
+        for name in ("C", "O", "P", "Z"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
 
@@ -249,7 +248,6 @@ class CertifiedSkill:
     key: str
     state: str
     C: dict[str, Any]
-    G: dict[str, Any]
     O: dict[str, Any]
     P: dict[str, Any]
     Z: dict[str, Any]
@@ -259,7 +257,7 @@ class CertifiedSkill:
         ensure_no_forbidden_payloads(payload)
         if payload.get("state") not in VALID_STATES:
             raise SchemaError(f"invalid skill state: {payload.get('state')}")
-        for name in ("C", "G", "O", "P", "Z"):
+        for name in ("C", "O", "P", "Z"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
 
@@ -268,7 +266,7 @@ class CertifiedSkill:
 
 
 @dataclass(slots=True)
-class DCEAInput:
+class GeometricSubskillSignal:
     relation_type: str
     anchor_slot: str | None
     target_slot: str | None
@@ -281,7 +279,7 @@ class DCEAInput:
     audit_pointer: dict[str, Any]
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "DCEAInput":
+    def from_dict(cls, payload: dict[str, Any]) -> "GeometricSubskillSignal":
         ensure_no_forbidden_payloads(payload)
         for name in (
             "relation_kernel",
@@ -336,7 +334,7 @@ class ActiveSubskillReadout:
     binding: dict[str, Any]
     relation_type: str
     activation_predicate: str
-    dcea_input: dict[str, Any]
+    geometric_readout: dict[str, Any]
     semantic_token: dict[str, Any]
     option_prior: dict[str, Any]
     expected_belief_effect: dict[str, Any]
@@ -351,7 +349,7 @@ class ActiveSubskillReadout:
             raise SchemaError(f"invalid active subskill status: {payload.get('status')}")
         for name in (
             "binding",
-            "dcea_input",
+            "geometric_readout",
             "semantic_token",
             "option_prior",
             "expected_belief_effect",
