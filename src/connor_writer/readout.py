@@ -16,6 +16,8 @@ from .schema import (
     SchemaError,
     SemanticSkillToken,
     SubskillReadout,
+    ensure_no_forbidden_payloads,
+    stable_id,
     utc_now,
 )
 from .scoring import trust_score
@@ -26,6 +28,38 @@ from .subskill import (
     resolve_binding,
     surface_for_skill,
 )
+
+
+def context_signature(context: dict[str, Any]) -> str:
+    return stable_id("ctx", context)
+
+
+def relation_signature(relation_item: dict[str, Any] | None) -> str | None:
+    if relation_item is None:
+        return None
+    return stable_id("rel", relation_item)
+
+
+def readout_id_for(
+    skill: CertifiedSkill,
+    status: str,
+    binding: dict[str, Any],
+    context_sig: str,
+    relation_sig: str | None,
+    reason: str | None = None,
+) -> str:
+    return stable_id(
+        "ro",
+        {
+            "skill_id": skill.id,
+            "skill_version": skill.Z.get("version"),
+            "status": status,
+            "binding": binding,
+            "context_signature": context_sig,
+            "relation_evidence_signature": relation_sig,
+            "reason": reason,
+        },
+    )
 
 
 class SkillReadoutBuilder:
@@ -42,12 +76,20 @@ class SkillReadoutBuilder:
         if skill.state != STATE_CERTIFIED:
             raise SchemaError("only certified skills can produce runtime readouts")
         context = context or {}
+        ensure_no_forbidden_payloads(context)
+        context_sig = context_signature(context)
         read_time = now or utc_now()
         trust = trust_score(skill.P, now=read_time)
         binding, null_reason = resolve_binding(skill, context)
         audit = audit_pointer(skill)
         if null_reason:
+            readout_id = readout_id_for(skill, "null", binding, context_sig, None, null_reason)
             return NullSubskillReadout(
+                readout_id=readout_id,
+                generated_at=read_time,
+                lifecycle_state="generated",
+                context_signature=context_sig,
+                relation_evidence_signature=None,
                 skill_id=skill.id,
                 key=skill.key,
                 status="null",
@@ -57,8 +99,22 @@ class SkillReadoutBuilder:
                 audit_pointer=audit,
             )
         relation_item, relation_reason = relation_evidence(skill, binding, context)
+        relation_sig = relation_signature(relation_item)
         if relation_reason:
+            readout_id = readout_id_for(
+                skill,
+                "null",
+                binding,
+                context_sig,
+                relation_sig,
+                relation_reason,
+            )
             return NullSubskillReadout(
+                readout_id=readout_id,
+                generated_at=read_time,
+                lifecycle_state="generated",
+                context_signature=context_sig,
+                relation_evidence_signature=relation_sig,
                 skill_id=skill.id,
                 key=skill.key,
                 status="null",
@@ -114,7 +170,13 @@ class SkillReadoutBuilder:
             "contradiction_count": skill.P.get("contradiction_count", 0),
             "critical_safety_failures": skill.P.get("critical_safety_failures", 0),
         }
+        readout_id = readout_id_for(skill, "active", binding, context_sig, relation_sig)
         return ActiveSubskillReadout(
+            readout_id=readout_id,
+            generated_at=read_time,
+            lifecycle_state="generated",
+            context_signature=context_sig,
+            relation_evidence_signature=relation_sig,
             skill_id=skill.id,
             key=skill.key,
             status="active",
@@ -138,4 +200,5 @@ def load_context(path: str | Path | None) -> dict[str, Any]:
         payload = json.load(handle)
     if not isinstance(payload, dict):
         raise SchemaError("context must be a JSON object")
+    ensure_no_forbidden_payloads(payload)
     return payload

@@ -12,7 +12,19 @@ from connor_writer.draft import SkillDraftBuilder
 from connor_writer.gate import PromotionGate
 from connor_writer.ledger import EvidenceLedger, load_jsonl_records
 from connor_writer.readout import SkillReadoutBuilder
-from connor_writer.schema import EvidenceRecord, STATE_CERTIFIED, STATE_DRAFT, STATE_SEED, SchemaError
+from connor_writer.readout_store import (
+    OutcomeLedger,
+    ReadoutLedger,
+    evidence_from_outcome,
+)
+from connor_writer.schema import (
+    EvidenceRecord,
+    OutcomeRecord,
+    STATE_CERTIFIED,
+    STATE_DRAFT,
+    STATE_SEED,
+    SchemaError,
+)
 from connor_writer.scoring import success_lcb, trust_score
 
 
@@ -125,6 +137,11 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(
                 set(payload),
                 {
+                    "readout_id",
+                    "generated_at",
+                    "lifecycle_state",
+                    "context_signature",
+                    "relation_evidence_signature",
                     "skill_id",
                     "key",
                     "status",
@@ -141,6 +158,10 @@ class LifecycleTests(unittest.TestCase):
                 },
             )
             self.assertEqual(payload["status"], "active")
+            self.assertTrue(payload["readout_id"].startswith("ro_"))
+            self.assertEqual(payload["lifecycle_state"], "generated")
+            self.assertTrue(payload["context_signature"].startswith("ctx_"))
+            self.assertTrue(payload["relation_evidence_signature"].startswith("rel_"))
             self.assertEqual(payload["relation_type"], "blocks")
             self.assertEqual(payload["semantic_token"]["skill_name"], "ClearApproach")
             self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
@@ -163,6 +184,7 @@ class LifecycleTests(unittest.TestCase):
             null_readout = SkillReadoutBuilder().build(loaded, context={}, now="2026-07-09T00:03:30+00:00")
             null_payload = null_readout.to_dict()
             self.assertEqual(null_payload["status"], "null")
+            self.assertTrue(null_payload["readout_id"].startswith("ro_"))
             self.assertIn("missing bound anchor", null_payload["reason"])
 
             manual_context = {
@@ -209,6 +231,58 @@ class LifecycleTests(unittest.TestCase):
                     "binding_quality_used"
                 ]
             )
+
+    def test_readout_persistence_and_outcome_update(self) -> None:
+        with self.tempdir() as tmp:
+            tmp_path = Path(tmp)
+            ledger = EvidenceLedger(tmp_path / "ledger")
+            for record in load_jsonl_records(SAMPLE_EVENTS):
+                ledger.append(record)
+            clear = next(
+                draft for draft in SkillDraftBuilder().build(ledger) if draft.C["name"] == "ClearApproach"
+            )
+            promotion = PromotionGate().evaluate(clear)
+            skill = CertifiedSkillBank(tmp_path / "skills").commit(clear, promotion)
+            context = json.loads(SAMPLE_CONTEXT.read_text(encoding="utf-8"))
+            readout = SkillReadoutBuilder().build(
+                skill, context=context, now="2026-07-09T00:03:30+00:00"
+            )
+
+            readouts = ReadoutLedger(tmp_path / "readouts")
+            first_id = readouts.append(readout)
+            second_id = readouts.append(readout)
+            self.assertEqual(first_id, readout.readout_id)
+            self.assertEqual(first_id, second_id)
+            self.assertIsNotNone(readouts.get(first_id))
+
+            outcome = OutcomeRecord.from_dict(
+                {
+                    "readout_id": first_id,
+                    "timestamp": "2026-07-09T00:04:00+00:00",
+                    "source": "verifier",
+                    "success": True,
+                    "observed_delta_belief": {
+                        "blocks": -1.0,
+                        "reachable": 1.0,
+                        "progress_delta": 0.9,
+                    },
+                    "executed_relative_parameters": {
+                        "relative_frame": "anchor_to_target",
+                        "push_distance": 0.2,
+                    },
+                    "verifier_labels": {"progress_delta": 0.9},
+                }
+            )
+            outcomes = OutcomeLedger(tmp_path / "outcomes")
+            outcomes.append(outcome)
+            evidence = evidence_from_outcome(readout, outcome, skill)
+            self.assertEqual(evidence.metadata["outcome_id"], outcome.id)
+            ledger.append(evidence)
+
+            updated_clear = next(
+                draft for draft in SkillDraftBuilder().build(ledger) if draft.C["name"] == "ClearApproach"
+            )
+            self.assertEqual(updated_clear.P["support_n"], 4)
 
     def test_suppressed_skill_cannot_produce_readout(self) -> None:
         with self.tempdir() as tmp:

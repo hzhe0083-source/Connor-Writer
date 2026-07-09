@@ -328,6 +328,11 @@ class SemanticSkillToken:
 
 @dataclass(slots=True)
 class ActiveSubskillReadout:
+    readout_id: str
+    generated_at: str
+    lifecycle_state: str
+    context_signature: str
+    relation_evidence_signature: str | None
     skill_id: str
     key: str
     status: str
@@ -347,6 +352,10 @@ class ActiveSubskillReadout:
         ensure_no_forbidden_payloads(payload)
         if payload.get("status") != "active":
             raise SchemaError(f"invalid active subskill status: {payload.get('status')}")
+        if not payload.get("readout_id"):
+            raise SchemaError("active subskill readout requires readout_id")
+        if not payload.get("generated_at"):
+            raise SchemaError("active subskill readout requires generated_at")
         for name in (
             "binding",
             "geometric_readout",
@@ -365,6 +374,11 @@ class ActiveSubskillReadout:
 
 @dataclass(slots=True)
 class NullSubskillReadout:
+    readout_id: str
+    generated_at: str
+    lifecycle_state: str
+    context_signature: str
+    relation_evidence_signature: str | None
     skill_id: str
     key: str
     status: str
@@ -378,6 +392,10 @@ class NullSubskillReadout:
         ensure_no_forbidden_payloads(payload)
         if payload.get("status") != "null":
             raise SchemaError(f"invalid null subskill status: {payload.get('status')}")
+        if not payload.get("readout_id"):
+            raise SchemaError("null subskill readout requires readout_id")
+        if not payload.get("generated_at"):
+            raise SchemaError("null subskill readout requires generated_at")
         for name in ("binding", "audit_pointer"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
@@ -387,6 +405,57 @@ class NullSubskillReadout:
 
 
 SubskillReadout = ActiveSubskillReadout | NullSubskillReadout
+
+
+@dataclass(slots=True)
+class OutcomeRecord:
+    id: str
+    readout_id: str
+    timestamp: str
+    source: str
+    success: bool
+    observed_delta_belief: dict[str, Any]
+    executed_relative_parameters: dict[str, Any]
+    verifier_labels: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "OutcomeRecord":
+        payload = dict(payload)
+        ensure_no_forbidden_payloads(payload)
+        payload.setdefault("timestamp", utc_now())
+        payload.setdefault("source", "unknown")
+        payload.setdefault("observed_delta_belief", {})
+        payload.setdefault("executed_relative_parameters", {})
+        payload.setdefault("verifier_labels", {})
+        payload.setdefault("metadata", {})
+        for name in (
+            "observed_delta_belief",
+            "executed_relative_parameters",
+            "verifier_labels",
+            "metadata",
+        ):
+            require_mapping(payload.get(name), name)
+        if not isinstance(payload.get("success"), bool):
+            raise SchemaError("outcome.success must be a boolean")
+        if not payload.get("readout_id"):
+            raise SchemaError("outcome requires readout_id")
+        if not payload.get("id"):
+            no_id = dict(payload)
+            no_id.pop("id", None)
+            payload["id"] = stable_id("out", no_id)
+        return cls(**payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def parse_subskill_readout(payload: dict[str, Any]) -> SubskillReadout:
+    if payload.get("status") == "active":
+        return ActiveSubskillReadout.from_dict(payload)
+    if payload.get("status") == "null":
+        return NullSubskillReadout.from_dict(payload)
+    raise SchemaError(f"invalid subskill readout status: {payload.get('status')}")
 
 
 def dumps_pretty(value: Any) -> str:

@@ -13,9 +13,15 @@ from .draft import SkillDraftBuilder
 from .gate import PromotionGate
 from .ledger import EvidenceLedger, load_jsonl_records
 from .readout import SkillReadoutBuilder, load_context
+from .readout_store import (
+    OutcomeLedger,
+    ReadoutLedger,
+    evidence_from_outcome,
+)
 from .schema import (
     CertifiedSkill,
     EvidenceRecord,
+    OutcomeRecord,
     PromotionRecord,
     SchemaError,
     SkillDraft,
@@ -53,6 +59,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_readout = sub.add_parser("readout", help="build runtime readout for a certified skill")
     p_readout.add_argument("skill")
     p_readout.add_argument("--context")
+    p_readout.add_argument("--readouts", help="append generated readout to this readout ledger")
+
+    p_outcome = sub.add_parser("outcome", help="record execution outcome for a persisted readout")
+    p_outcome.add_argument("readouts")
+    p_outcome.add_argument("--readout-id", required=True)
+    p_outcome.add_argument("--skill", required=True)
+    p_outcome.add_argument("--ledger", required=True)
+    p_outcome.add_argument("--outcomes", required=True)
+    p_outcome.add_argument("--success", choices=("true", "false"), required=True)
+    p_outcome.add_argument("--observed", default="{}")
+    p_outcome.add_argument("--executed", default="{}")
+    p_outcome.add_argument("--labels", default="{}")
+    p_outcome.add_argument("--source", default="execution")
 
     p_audit = sub.add_parser("audit", help="show certificate audit trail for a skill")
     p_audit.add_argument("skill")
@@ -100,6 +119,12 @@ def _validate_json_object(payload: Any) -> None:
         SkillDraft.from_dict(payload)
     elif {"checks", "passed", "scope"}.issubset(payload):
         PromotionRecord.from_dict(payload)
+    elif {"readout_id", "status", "skill_id"}.issubset(payload):
+        from .schema import parse_subskill_readout
+
+        parse_subskill_readout(payload)
+    elif {"readout_id", "success", "observed_delta_belief"}.issubset(payload):
+        OutcomeRecord.from_dict(payload)
 
 
 def cmd_ingest(evidence_jsonl: str, ledger_path: str) -> int:
@@ -155,10 +180,67 @@ def cmd_show(path: str) -> int:
     return 0
 
 
-def cmd_readout(skill_path: str, context_path: str | None) -> int:
+def cmd_readout(skill_path: str, context_path: str | None, readouts_path: str | None = None) -> int:
     context = load_context(context_path)
     readout = SkillReadoutBuilder().build(skill_path, context=context)
+    if readouts_path:
+        ReadoutLedger(readouts_path).append(readout)
     print(dumps_pretty(readout.to_dict()), end="")
+    return 0
+
+
+def parse_json_arg(value: str, name: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise SchemaError(f"{name} must be JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SchemaError(f"{name} must be a JSON object")
+    ensure_no_forbidden_payloads(payload)
+    return payload
+
+
+def cmd_outcome(
+    readouts_path: str,
+    readout_id: str,
+    skill_path: str,
+    ledger_path: str,
+    outcomes_path: str,
+    success: str,
+    observed: str,
+    executed: str,
+    labels: str,
+    source: str,
+) -> int:
+    readout = ReadoutLedger(readouts_path).get(readout_id)
+    if readout is None:
+        raise SchemaError(f"readout not found: {readout_id}")
+    skill = load_skill(skill_path)
+    outcome = OutcomeRecord.from_dict(
+        {
+            "readout_id": readout_id,
+            "source": source,
+            "success": success == "true",
+            "observed_delta_belief": parse_json_arg(observed, "--observed"),
+            "executed_relative_parameters": parse_json_arg(executed, "--executed"),
+            "verifier_labels": parse_json_arg(labels, "--labels"),
+        }
+    )
+    OutcomeLedger(outcomes_path).append(outcome)
+    evidence = evidence_from_outcome(readout, outcome, skill)
+    evidence_id = EvidenceLedger(ledger_path).append(evidence)
+    print(
+        dumps_pretty(
+            {
+                "outcome_id": outcome.id,
+                "readout_id": readout_id,
+                "evidence_id": evidence_id,
+                "ledger": str(EvidenceLedger(ledger_path).file_path),
+                "outcomes": str(OutcomeLedger(outcomes_path).file_path),
+            }
+        ),
+        end="",
+    )
     return 0
 
 
@@ -185,7 +267,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "show":
             return cmd_show(args.path)
         if args.command == "readout":
-            return cmd_readout(args.skill, args.context)
+            return cmd_readout(args.skill, args.context, args.readouts)
+        if args.command == "outcome":
+            return cmd_outcome(
+                args.readouts,
+                args.readout_id,
+                args.skill,
+                args.ledger,
+                args.outcomes,
+                args.success,
+                args.observed,
+                args.executed,
+                args.labels,
+                args.source,
+            )
         if args.command == "audit":
             return cmd_audit(args.skill)
     except SchemaError as exc:

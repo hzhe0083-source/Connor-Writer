@@ -10,7 +10,9 @@ Execution Trace
   -> SkillDraft
   -> PromotionRecord
   -> CertifiedSkill
-  -> ActiveSubskillReadout / NullSubskillReadout
+  -> persisted ActiveSubskillReadout / NullSubskillReadout
+  -> OutcomeRecord
+  -> EvidenceRecord
 ```
 
 Core rule:
@@ -60,7 +62,8 @@ PYTHONPATH=src python3 -m connor_writer draft --ledger ledger/ --drafts drafts/
 PYTHONPATH=src python3 -m connor_writer promote drafts/ --bank skills/
 PYTHONPATH=src python3 -m connor_writer list --bank skills/
 PYTHONPATH=src python3 -m connor_writer show skills/clearapproach.skill.json
-PYTHONPATH=src python3 -m connor_writer readout skills/clearapproach.skill.json --context examples/context.json
+PYTHONPATH=src python3 -m connor_writer readout skills/clearapproach.skill.json --context examples/context.json --readouts readouts/
+PYTHONPATH=src python3 -m connor_writer outcome readouts/ --readout-id <ro_id> --skill skills/clearapproach.skill.json --ledger ledger/ --outcomes outcomes/ --success true --observed '{"progress_delta": 0.8}' --executed '{}' --labels '{}'
 PYTHONPATH=src python3 -m connor_writer audit skills/clearapproach.skill.json
 ```
 
@@ -95,6 +98,11 @@ Certified skills are not subskills, and they are not tied to any one downstream 
 
 ```text
 ActiveSubskillReadout
+  readout_id
+  generated_at
+  lifecycle_state
+  context_signature
+  relation_evidence_signature
   geometric_readout
   semantic_token
   option_prior
@@ -104,6 +112,11 @@ ActiveSubskillReadout
   audit_pointer
 
 NullSubskillReadout
+  readout_id
+  generated_at
+  lifecycle_state
+  context_signature
+  relation_evidence_signature
   reason
   binding
   trust_score = 0
@@ -149,7 +162,28 @@ CertifiedSkill file:
   durable, downstream-agnostic operator = (C, O, P, Z)
 
 SubskillReadout:
-  transient current-scene projection generated from the skill and context
+  persisted current-scene projection generated from the skill and context
+```
+
+## Readout Persistence And Update
+
+Readouts are durable runtime records. They are numbered by a deterministic content id:
+
+```text
+readout_id = hash(skill_id, skill_version, context_signature, relation_evidence_signature, binding, status)
+```
+
+Readout persistence follows a Hermes-style memory discipline: generated records are appended, later execution outcomes are appended separately, and only then are outcomes converted into new evidence. A certified skill is never mutated directly from a readout.
+
+```text
+CertifiedSkill + current context
+  -> SubskillReadout(readout_id)
+  -> ReadoutLedger
+  -> OutcomeRecord(readout_id)
+  -> EvidenceRecord
+  -> EvidenceLedger
+  -> draft/promote
+  -> CertifiedSkill version update
 ```
 
 ## Non-goals for v1
