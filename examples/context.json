@@ -1,0 +1,19 @@
+{
+  "object_bindings": {
+    "anchor": {
+      "slot": "obj_3",
+      "label": "tray",
+      "grounding_confidence": 0.91
+    },
+    "target": {
+      "slot": "obj_7",
+      "label": "bowl",
+      "grounding_confidence": 0.88
+    }
+  },
+  "schema": {
+    "task": "place target object into bowl",
+    "active_relation": "blocks(anchor,target)"
+  }
+}
+
