@@ -40,14 +40,41 @@ def resolve_binding(skill: CertifiedSkill, context: dict[str, Any]) -> tuple[dic
         "target": target,
     }
     if not isinstance(anchor, dict):
-        return binding, f"missing grounded anchor role: {anchor_role}"
+        return binding, f"missing bound anchor role: {anchor_role}"
     if not isinstance(target, dict):
-        return binding, f"missing grounded target role: {target_role}"
-    if float(anchor.get("grounding_confidence", 0.0)) <= 0.0:
-        return binding, f"ungrounded anchor role: {anchor_role}"
-    if float(target.get("grounding_confidence", 0.0)) <= 0.0:
-        return binding, f"ungrounded target role: {target_role}"
+        return binding, f"missing bound target role: {target_role}"
+    anchor_confidence = binding_confidence(anchor)
+    target_confidence = binding_confidence(target)
+    if anchor_confidence is not None and anchor_confidence <= 0.0:
+        return binding, f"unbound anchor role: {anchor_role}"
+    if target_confidence is not None and target_confidence <= 0.0:
+        return binding, f"unbound target role: {target_role}"
     return binding, None
+
+
+def binding_confidence(slot: dict[str, Any]) -> float | None:
+    """Return an optional confidence supplied by the current-scene interface.
+
+    Connor-Writer does not compute this value. It may be provided by a human
+    annotation, a VLM/perception adapter, or a future grounding module.
+    """
+    value = slot.get("binding_confidence")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def binding_quality(binding: dict[str, Any]) -> float | None:
+    values: list[float] = []
+    for role in ("anchor", "target"):
+        slot = binding.get(role)
+        if isinstance(slot, dict):
+            confidence = binding_confidence(slot)
+            if confidence is not None:
+                values.append(confidence)
+    if not values:
+        return None
+    return max(0.0, min(1.0, min(values)))
 
 
 def activation_score(skill: CertifiedSkill, binding: dict[str, Any], trust: float) -> float:
@@ -55,11 +82,10 @@ def activation_score(skill: CertifiedSkill, binding: dict[str, Any], trust: floa
     target = binding.get("target") or {}
     if not isinstance(anchor, dict) or not isinstance(target, dict):
         return 0.0
-    p_ground = min(
-        float(anchor.get("grounding_confidence", 0.0)),
-        float(target.get("grounding_confidence", 0.0)),
-    )
-    return max(0.0, min(1.0, trust * p_ground))
+    quality = binding_quality(binding)
+    if quality is None:
+        return max(0.0, min(1.0, trust))
+    return max(0.0, min(1.0, trust * quality))
 
 
 def build_geometric_signal(
@@ -73,6 +99,9 @@ def build_geometric_signal(
     activation = activation_score(skill, binding, trust)
     anchor = binding.get("anchor") if isinstance(binding.get("anchor"), dict) else {}
     target = binding.get("target") if isinstance(binding.get("target"), dict) else {}
+    anchor_confidence = binding_confidence(anchor)
+    target_confidence = binding_confidence(target)
+    quality = binding_quality(binding)
     surface = surface_for_skill(skill)
     return GeometricSubskillSignal(
         relation_type=str(surface.get("relation_type", "unknown")),
@@ -82,8 +111,10 @@ def build_geometric_signal(
         relation_kernel=surface.get("relation_kernel", {}),
         grounding_requirements=surface.get("grounding_requirements", []),
         confidence_features={
-            "p_ground_anchor": float(anchor.get("grounding_confidence", 0.0)),
-            "p_ground_target": float(target.get("grounding_confidence", 0.0)),
+            "binding_confidence_anchor": anchor_confidence,
+            "binding_confidence_target": target_confidence,
+            "binding_quality_used": quality,
+            "binding_confidence_source": "provided" if quality is not None else "unavailable",
             "trust": trust,
             "scope": skill.Z.get("scope"),
             "context_schema": context.get("schema", {}),

@@ -19,7 +19,7 @@ FAMILY_SPECS: dict[str, dict[str, Any]] = {
             "corridor_clearance",
             "boundary_side",
         ],
-        "null_grounding_policy": "null_if_anchor_or_target_ungrounded",
+        "null_grounding_policy": "null_if_anchor_or_target_unbound",
     },
     "align_release": {
         "relation_kernel": {
@@ -33,7 +33,7 @@ FAMILY_SPECS: dict[str, dict[str, Any]] = {
             "inside_probability",
             "release_region_spread",
         ],
-        "null_grounding_policy": "null_if_anchor_or_target_ungrounded",
+        "null_grounding_policy": "null_if_anchor_or_target_unbound",
     },
     "recover_grasp": {
         "relation_kernel": {
@@ -47,7 +47,7 @@ FAMILY_SPECS: dict[str, dict[str, Any]] = {
             "grasp_axis",
             "slip_risk",
         ],
-        "null_grounding_policy": "null_if_anchor_ungrounded",
+        "null_grounding_policy": "null_if_anchor_unbound",
     },
 }
 
@@ -79,7 +79,7 @@ def build_subskill_surface(contract: dict[str, Any], operator: dict[str, Any]) -
                 "output": "generic relation evidence",
             },
             "geometric_feature_reducer": ["peak", "centroid", "covariance"],
-            "null_grounding_policy": "null_if_required_roles_ungrounded",
+            "null_grounding_policy": "null_if_required_roles_unbound",
         },
     )
     roles = contract.get("roles", {})
@@ -87,7 +87,7 @@ def build_subskill_surface(contract: dict[str, Any], operator: dict[str, Any]) -
     target_role = str(roles.get("target", "target"))
     relation_type = relation_type_from_contract(contract)
     activation_predicate = (
-        f"grounded({anchor_role}) and grounded({target_role}) "
+        f"bound({anchor_role}) and bound({target_role}) "
         f"and active({relation_type})"
     )
     return {
@@ -97,8 +97,8 @@ def build_subskill_surface(contract: dict[str, Any], operator: dict[str, Any]) -
         "anchor_role": anchor_role,
         "target_role": target_role,
         "grounding_requirements": [
-            f"grounded({anchor_role})",
-            f"grounded({target_role})",
+            f"bound({anchor_role})",
+            f"bound({target_role})",
             "current_scene_object_slots",
         ],
         "relation_kernel": spec["relation_kernel"],

@@ -122,7 +122,7 @@ safety_metadata         -> Q selector / compiler constraints
 audit_pointer           -> skill version, promotion record, and evidence traceability
 ```
 
-If required roles cannot be grounded in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence.
+If required roles cannot be bound in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence. Optional `binding_confidence` values may be supplied by an external current-scene interface; Connor-Writer does not compute them from images.
 
 This separation is intentional:
 

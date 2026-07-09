@@ -157,7 +157,30 @@ class LifecycleTests(unittest.TestCase):
             null_readout = SkillReadoutBuilder().build(loaded, context={}, now="2026-07-09T00:03:30+00:00")
             null_payload = null_readout.to_dict()
             self.assertEqual(null_payload["status"], "null")
-            self.assertIn("missing grounded anchor", null_payload["reason"])
+            self.assertIn("missing bound anchor", null_payload["reason"])
+
+            manual_context = {
+                "object_bindings": {
+                    "anchor": {"slot": "obj_manual_anchor", "label": "manual anchor"},
+                    "target": {"slot": "obj_manual_target", "label": "manual target"},
+                },
+                "schema": {"task": "manual binding smoke test"},
+            }
+            manual_readout = SkillReadoutBuilder().build(
+                loaded, context=manual_context, now="2026-07-09T00:03:30+00:00"
+            ).to_dict()
+            self.assertEqual(manual_readout["status"], "active")
+            self.assertEqual(
+                manual_readout["geometric_readout"]["confidence_features"][
+                    "binding_confidence_source"
+                ],
+                "unavailable",
+            )
+            self.assertIsNone(
+                manual_readout["geometric_readout"]["confidence_features"][
+                    "binding_quality_used"
+                ]
+            )
 
     def test_suppressed_skill_cannot_produce_readout(self) -> None:
         with self.tempdir() as tmp:
