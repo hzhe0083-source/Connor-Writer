@@ -149,6 +149,12 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(payload["geometric_readout"]["target_slot"], "obj_7")
             self.assertEqual(payload["geometric_readout"]["relation_type"], "blocks")
             self.assertIn("relation_kernel", payload["geometric_readout"])
+            self.assertEqual(
+                payload["geometric_readout"]["confidence_features"]["relation_evidence"][
+                    "source"
+                ],
+                "example_fixture",
+            )
             self.assertEqual(payload["option_prior"]["option_family"], "displace_context")
             self.assertGreater(payload["expected_belief_effect"]["progress_delta"], 0)
             self.assertGreater(payload["trust_score"], 0)
@@ -168,6 +174,28 @@ class LifecycleTests(unittest.TestCase):
             }
             manual_readout = SkillReadoutBuilder().build(
                 loaded, context=manual_context, now="2026-07-09T00:03:30+00:00"
+            ).to_dict()
+            self.assertEqual(manual_readout["status"], "null")
+            self.assertIn("missing relation evidence", manual_readout["reason"])
+
+            strict_context = {
+                "object_bindings": {
+                    "anchor": {"slot": "obj_manual_anchor", "label": "manual anchor"},
+                    "target": {"slot": "obj_manual_target", "label": "manual target"},
+                },
+                "relation_evidence": [
+                    {
+                        "relation_type": "blocks",
+                        "anchor": "obj_manual_anchor",
+                        "target": "obj_manual_target",
+                        "source": "manual_test_fixture",
+                        "status": "observed",
+                    }
+                ],
+                "schema": {"task": "manual binding smoke test"},
+            }
+            manual_readout = SkillReadoutBuilder().build(
+                loaded, context=strict_context, now="2026-07-09T00:03:30+00:00"
             ).to_dict()
             self.assertEqual(manual_readout["status"], "active")
             self.assertEqual(

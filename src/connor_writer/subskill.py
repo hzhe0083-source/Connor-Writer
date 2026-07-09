@@ -77,6 +77,64 @@ def binding_quality(binding: dict[str, Any]) -> float | None:
     return max(0.0, min(1.0, min(values)))
 
 
+def _slot_id(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("slot") or value.get("id") or "")
+    return str(value or "")
+
+
+def _relation_matches(
+    evidence: dict[str, Any],
+    relation_type: str,
+    anchor_slot: str,
+    target_slot: str,
+    anchor_role: str,
+    target_role: str,
+) -> bool:
+    if str(evidence.get("relation_type", "")).strip().lower() != relation_type:
+        return False
+    evidence_anchor = _slot_id(evidence.get("anchor") or evidence.get("subject"))
+    evidence_target = _slot_id(evidence.get("target") or evidence.get("object"))
+    valid_anchors = {anchor_slot, anchor_role, "anchor"}
+    valid_targets = {target_slot, target_role, "target"}
+    return evidence_anchor in valid_anchors and evidence_target in valid_targets
+
+
+def relation_evidence(
+    skill: CertifiedSkill,
+    binding: dict[str, Any],
+    context: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Return current-scene relation evidence required for active readout.
+
+    This prevents Connor-Writer from turning a role binding into an active
+    subskill unless the current-scene interface explicitly states that the
+    skill's relation is active and where that statement came from.
+    """
+    surface = surface_for_skill(skill)
+    relation_type = str(surface.get("relation_type", "unknown")).strip().lower()
+    anchor_slot = _slot_id(binding.get("anchor"))
+    target_slot = _slot_id(binding.get("target"))
+    anchor_role = str(binding.get("anchor_role") or "anchor")
+    target_role = str(binding.get("target_role") or "target")
+    evidence_items = context.get("relation_evidence")
+    if evidence_items is None:
+        schema = context.get("schema", {})
+        if isinstance(schema, dict):
+            evidence_items = schema.get("relation_evidence")
+    if not isinstance(evidence_items, list):
+        return None, f"missing relation evidence: {relation_type}({anchor_slot},{target_slot})"
+    for item in evidence_items:
+        if not isinstance(item, dict):
+            continue
+        if _relation_matches(item, relation_type, anchor_slot, target_slot, anchor_role, target_role):
+            source = item.get("source")
+            if not isinstance(source, str) or not source.strip():
+                return None, f"relation evidence lacks source: {relation_type}({anchor_slot},{target_slot})"
+            return item, None
+    return None, f"no matching relation evidence: {relation_type}({anchor_slot},{target_slot})"
+
+
 def activation_score(skill: CertifiedSkill, binding: dict[str, Any], trust: float) -> float:
     anchor = binding.get("anchor") or {}
     target = binding.get("target") or {}
@@ -91,6 +149,7 @@ def activation_score(skill: CertifiedSkill, binding: dict[str, Any], trust: floa
 def build_geometric_signal(
     skill: CertifiedSkill,
     binding: dict[str, Any],
+    relation_item: dict[str, Any] | None = None,
     context: dict[str, Any] | None = None,
     now: str | None = None,
 ) -> GeometricSubskillSignal:
@@ -115,6 +174,7 @@ def build_geometric_signal(
             "binding_confidence_target": target_confidence,
             "binding_quality_used": quality,
             "binding_confidence_source": "provided" if quality is not None else "unavailable",
+            "relation_evidence": relation_item or {},
             "trust": trust,
             "scope": skill.Z.get("scope"),
             "context_schema": context.get("schema", {}),

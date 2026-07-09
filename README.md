@@ -124,6 +124,24 @@ audit_pointer           -> skill version, promotion record, and evidence traceab
 
 If required roles cannot be bound in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence. Optional `binding_confidence` values may be supplied by an external current-scene interface; Connor-Writer does not compute them from images.
 
+Active readouts require explicit current-scene relation evidence:
+
+```json
+{
+  "relation_evidence": [
+    {
+      "relation_type": "blocks",
+      "anchor": "obj_3",
+      "target": "obj_7",
+      "source": "example_fixture",
+      "status": "observed"
+    }
+  ]
+}
+```
+
+If relation evidence is absent, mismatched, or lacks a source, readout returns `NullSubskillReadout`. This prevents a manually guessed binding from becoming an active subskill.
+
 This separation is intentional:
 
 ```text

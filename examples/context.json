@@ -14,5 +14,14 @@
   "schema": {
     "task": "place target object into bowl",
     "active_relation": "blocks(anchor,target)"
-  }
+  },
+  "relation_evidence": [
+    {
+      "relation_type": "blocks",
+      "anchor": "obj_3",
+      "target": "obj_7",
+      "source": "example_fixture",
+      "status": "observed"
+    }
+  ]
 }

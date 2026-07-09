@@ -19,7 +19,13 @@ from .schema import (
     utc_now,
 )
 from .scoring import trust_score
-from .subskill import audit_pointer, build_geometric_signal, resolve_binding, surface_for_skill
+from .subskill import (
+    audit_pointer,
+    build_geometric_signal,
+    relation_evidence,
+    resolve_binding,
+    surface_for_skill,
+)
 
 
 class SkillReadoutBuilder:
@@ -50,6 +56,17 @@ class SkillReadoutBuilder:
                 trust_score=0.0,
                 audit_pointer=audit,
             )
+        relation_item, relation_reason = relation_evidence(skill, binding, context)
+        if relation_reason:
+            return NullSubskillReadout(
+                skill_id=skill.id,
+                key=skill.key,
+                status="null",
+                reason=relation_reason,
+                binding=binding,
+                trust_score=0.0,
+                audit_pointer=audit,
+            )
 
         surface = surface_for_skill(skill)
         option_prior = {
@@ -57,7 +74,13 @@ class SkillReadoutBuilder:
             "relative_frame": skill.O.get("relative_frame"),
             "parameter_prior": skill.O.get("parameter_prior", {}),
         }
-        geometric_readout = build_geometric_signal(skill, binding, context=context, now=read_time)
+        geometric_readout = build_geometric_signal(
+            skill,
+            binding,
+            relation_item=relation_item,
+            context=context,
+            now=read_time,
+        )
         semantic_token = SemanticSkillToken(
             skill_id=skill.id,
             skill_name=str(skill.C.get("name", "")),
