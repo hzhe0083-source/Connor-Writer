@@ -197,6 +197,7 @@ class SkillDraft:
     key: str
     state: str
     C: dict[str, Any]
+    G: dict[str, Any]
     O: dict[str, Any]
     P: dict[str, Any]
     Z: dict[str, Any]
@@ -206,7 +207,7 @@ class SkillDraft:
         ensure_no_forbidden_payloads(payload)
         if payload.get("state") not in VALID_STATES:
             raise SchemaError(f"invalid draft state: {payload.get('state')}")
-        for name in ("C", "O", "P", "Z"):
+        for name in ("C", "G", "O", "P", "Z"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
 
@@ -248,6 +249,7 @@ class CertifiedSkill:
     key: str
     state: str
     C: dict[str, Any]
+    G: dict[str, Any]
     O: dict[str, Any]
     P: dict[str, Any]
     Z: dict[str, Any]
@@ -257,7 +259,7 @@ class CertifiedSkill:
         ensure_no_forbidden_payloads(payload)
         if payload.get("state") not in VALID_STATES:
             raise SchemaError(f"invalid skill state: {payload.get('state')}")
-        for name in ("C", "O", "P", "Z"):
+        for name in ("C", "G", "O", "P", "Z"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
 
@@ -266,11 +268,76 @@ class CertifiedSkill:
 
 
 @dataclass(slots=True)
-class SkillReadout:
+class DCEAInput:
+    relation_type: str
+    anchor_slot: str | None
+    target_slot: str | None
+    activation_score: float
+    relation_kernel: dict[str, Any]
+    grounding_requirements: list[str]
+    confidence_features: dict[str, Any]
+    relative_option_prior: dict[str, Any]
+    expected_belief_effect: dict[str, Any]
+    audit_pointer: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "DCEAInput":
+        ensure_no_forbidden_payloads(payload)
+        for name in (
+            "relation_kernel",
+            "confidence_features",
+            "relative_option_prior",
+            "expected_belief_effect",
+            "audit_pointer",
+        ):
+            require_mapping(payload.get(name), name)
+        require_list(payload.get("grounding_requirements"), "grounding_requirements")
+        return cls(**payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class SemanticSkillToken:
+    skill_id: str
+    skill_name: str
+    relation_type: str
+    option_family: str
+    effect_type: str
+    binding: dict[str, Any]
+    grounding_features: dict[str, Any]
+    posterior_summary: dict[str, Any]
+    trust_score: float
+    scope: str
+    audit_pointer: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "SemanticSkillToken":
+        ensure_no_forbidden_payloads(payload)
+        for name in (
+            "binding",
+            "grounding_features",
+            "posterior_summary",
+            "audit_pointer",
+        ):
+            require_mapping(payload.get(name), name)
+        return cls(**payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class ActiveSubskillReadout:
     skill_id: str
     key: str
+    status: str
+    binding: dict[str, Any]
+    relation_type: str
+    activation_predicate: str
+    dcea_input: dict[str, Any]
     semantic_token: dict[str, Any]
-    geometric_prior: dict[str, Any]
     option_prior: dict[str, Any]
     expected_belief_effect: dict[str, Any]
     trust_score: float
@@ -278,11 +345,14 @@ class SkillReadout:
     audit_pointer: dict[str, Any]
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "SkillReadout":
+    def from_dict(cls, payload: dict[str, Any]) -> "ActiveSubskillReadout":
         ensure_no_forbidden_payloads(payload)
+        if payload.get("status") != "active":
+            raise SchemaError(f"invalid active subskill status: {payload.get('status')}")
         for name in (
+            "binding",
+            "dcea_input",
             "semantic_token",
-            "geometric_prior",
             "option_prior",
             "expected_belief_effect",
             "safety_metadata",
@@ -295,6 +365,31 @@ class SkillReadout:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class NullSubskillReadout:
+    skill_id: str
+    key: str
+    status: str
+    reason: str
+    binding: dict[str, Any]
+    trust_score: float
+    audit_pointer: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "NullSubskillReadout":
+        ensure_no_forbidden_payloads(payload)
+        if payload.get("status") != "null":
+            raise SchemaError(f"invalid null subskill status: {payload.get('status')}")
+        for name in ("binding", "audit_pointer"):
+            require_mapping(payload.get(name), name)
+        return cls(**payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+SubskillReadout = ActiveSubskillReadout | NullSubskillReadout
+
+
 def dumps_pretty(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
-

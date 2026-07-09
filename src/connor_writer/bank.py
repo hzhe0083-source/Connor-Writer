@@ -56,6 +56,7 @@ class CertifiedSkillBank:
             "key": draft.key,
             "state": STATE_CERTIFIED,
             "C": draft.C,
+            "G": draft.G,
             "O": draft.O,
             "P": draft.P,
             "Z": certificate,

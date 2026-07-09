@@ -61,6 +61,9 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(set(names), {"AlignAndRelease", "ClearApproach", "RecoverGrasp"})
             clear = names["ClearApproach"]
             self.assertEqual(clear.state, STATE_DRAFT)
+            self.assertIn("G", clear.to_dict())
+            self.assertEqual(clear.G["relation_type"], "blocks")
+            self.assertIn("relation_kernel", clear.G)
             self.assertEqual(clear.P["support_n"], 3)
             self.assertEqual(len(clear.Z["evidence_ids"]), 4)
 
@@ -126,8 +129,12 @@ class LifecycleTests(unittest.TestCase):
                 {
                     "skill_id",
                     "key",
+                    "status",
+                    "binding",
+                    "relation_type",
+                    "activation_predicate",
+                    "dcea_input",
                     "semantic_token",
-                    "geometric_prior",
                     "option_prior",
                     "expected_belief_effect",
                     "trust_score",
@@ -135,12 +142,24 @@ class LifecycleTests(unittest.TestCase):
                     "audit_pointer",
                 },
             )
+            self.assertEqual(payload["status"], "active")
+            self.assertEqual(payload["relation_type"], "blocks")
             self.assertEqual(payload["semantic_token"]["skill_name"], "ClearApproach")
-            self.assertEqual(payload["geometric_prior"]["object_bindings"]["anchor"]["label"], "tray")
+            self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
+            self.assertEqual(payload["binding"]["anchor"]["label"], "tray")
+            self.assertEqual(payload["dcea_input"]["anchor_slot"], "obj_3")
+            self.assertEqual(payload["dcea_input"]["target_slot"], "obj_7")
+            self.assertEqual(payload["dcea_input"]["relation_type"], "blocks")
+            self.assertIn("relation_kernel", payload["dcea_input"])
             self.assertEqual(payload["option_prior"]["option_family"], "displace_context")
             self.assertGreater(payload["expected_belief_effect"]["progress_delta"], 0)
             self.assertGreater(payload["trust_score"], 0)
             self.assertTrue(payload["audit_pointer"]["evidence_ids"])
+
+            null_readout = SkillReadoutBuilder().build(loaded, context={}, now="2026-07-09T00:03:30+00:00")
+            null_payload = null_readout.to_dict()
+            self.assertEqual(null_payload["status"], "null")
+            self.assertIn("missing grounded anchor", null_payload["reason"])
 
     def test_suppressed_skill_cannot_produce_readout(self) -> None:
         with self.tempdir() as tmp:
@@ -204,9 +223,10 @@ class LifecycleTests(unittest.TestCase):
                 str(SAMPLE_CONTEXT),
             )
             payload = json.loads(readout.stdout)
-            self.assertEqual(payload["semantic_token"]["skill_name"], "ClearApproach")
+            self.assertEqual(payload["status"], "active")
+            self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
+            self.assertEqual(payload["dcea_input"]["relation_type"], "blocks")
 
 
 if __name__ == "__main__":
     unittest.main()
-

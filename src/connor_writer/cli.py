@@ -94,9 +94,9 @@ def _validate_json_object(payload: Any) -> None:
         raise SchemaError("JSON file must contain an object")
     if {"source", "vlm_branch_contract"}.issubset(payload):
         EvidenceRecord.from_dict(payload)
-    elif {"C", "O", "P", "Z", "state"}.issubset(payload) and payload.get("state") == "certified":
+    elif {"C", "G", "O", "P", "Z", "state"}.issubset(payload) and payload.get("state") == "certified":
         CertifiedSkill.from_dict(payload)
-    elif {"C", "O", "P", "Z", "state"}.issubset(payload):
+    elif {"C", "G", "O", "P", "Z", "state"}.issubset(payload):
         SkillDraft.from_dict(payload)
     elif {"checks", "passed", "scope"}.issubset(payload):
         PromotionRecord.from_dict(payload)
@@ -196,4 +196,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
