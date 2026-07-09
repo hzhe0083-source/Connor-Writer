@@ -346,9 +346,14 @@ class ActiveSubskillReadout:
     trust_score: float
     safety_metadata: dict[str, Any]
     audit_pointer: dict[str, Any]
+    experience_readout: dict[str, Any] = field(default_factory=dict)
+    bswm_input: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ActiveSubskillReadout":
+        payload = dict(payload)
+        payload.setdefault("experience_readout", {})
+        payload.setdefault("bswm_input", {})
         ensure_no_forbidden_payloads(payload)
         if payload.get("status") != "active":
             raise SchemaError(f"invalid active subskill status: {payload.get('status')}")
@@ -364,6 +369,8 @@ class ActiveSubskillReadout:
             "expected_belief_effect",
             "safety_metadata",
             "audit_pointer",
+            "experience_readout",
+            "bswm_input",
         ):
             require_mapping(payload.get(name), name)
         return cls(**payload)
@@ -386,9 +393,14 @@ class NullSubskillReadout:
     binding: dict[str, Any]
     trust_score: float
     audit_pointer: dict[str, Any]
+    experience_readout: dict[str, Any] = field(default_factory=dict)
+    bswm_input: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "NullSubskillReadout":
+        payload = dict(payload)
+        payload.setdefault("experience_readout", {})
+        payload.setdefault("bswm_input", {})
         ensure_no_forbidden_payloads(payload)
         if payload.get("status") != "null":
             raise SchemaError(f"invalid null subskill status: {payload.get('status')}")
@@ -396,7 +408,7 @@ class NullSubskillReadout:
             raise SchemaError("null subskill readout requires readout_id")
         if not payload.get("generated_at"):
             raise SchemaError("null subskill readout requires generated_at")
-        for name in ("binding", "audit_pointer"):
+        for name in ("binding", "audit_pointer", "experience_readout", "bswm_input"):
             require_mapping(payload.get(name), name)
         return cls(**payload)
 

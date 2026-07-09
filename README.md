@@ -111,6 +111,8 @@ ActiveSubskillReadout
   trust_score
   safety_metadata
   audit_pointer
+  experience_readout
+  bswm_input
 
 NullSubskillReadout
   readout_id
@@ -122,6 +124,8 @@ NullSubskillReadout
   binding
   trust_score = 0
   audit_pointer
+  experience_readout
+  bswm_input
 ```
 
 The active readout is the runtime object that can replace Connor-0 long-term memory rows:
@@ -134,9 +138,41 @@ expected_belief_effect  -> BSWM conditioning/check
 trust_score             -> posterior/freshness/grounding/contradiction summary
 safety_metadata         -> Q selector / compiler constraints
 audit_pointer           -> skill version, promotion record, and evidence traceability
+experience_readout      -> compact past-experience summary from C/O/P/Z for BSWM/VLM handoff
+bswm_input              -> versioned Connor-0 BSWM consumption contract
 ```
 
-If required roles cannot be bound in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence. Optional `binding_confidence` values may be supplied by an external current-scene interface; Connor-Writer does not compute them from images.
+`experience_readout` is present on both active and null readouts. It contains the certified skill's branch mode, relation type, applicability gate, parameter prior, expected belief effect, posterior outcome summary, safety summary, current-scene gate status, and audit pointer. It is not raw evidence and does not contain images, crops, features, absolute coordinates, or trajectories.
+
+`bswm_input` is the stable handoff object Connor-0 should consume. It wraps the readout into a versioned, content-addressed BSWM contract:
+
+```text
+bswm_input
+  schema_version = connor_writer.bswm_input.v1
+  consumer = connor0.bswm
+  state_role = planning_sufficient_evidence_conditioned_belief_input
+  readout_ref
+    readout_id / generated_at / skill_id / skill_version
+    context_signature / relation_evidence_signature
+  storage_contract
+    append_only readout ledger
+    outcome_writeback_key = readout_id
+    same_readout_id_requires_same_content = true
+  current_scene_gate
+    ready_for_bswm
+    active_routes: belief_evidence / skill_token / audit_only
+  belief_evidence
+    object_bindings / required_relation_evidence
+    relation_evidence / geometric_readout
+  skill_conditioning
+    semantic_token / experience_readout / trust scores
+  branch_conditioning
+    branch_mode / option_prior / expected_belief_effect / safety_metadata
+```
+
+Connor-0 should read `bswm_input`, not reconstruct a BSWM input by guessing across top-level readout fields. Active readouts set `ready_for_bswm=true` and expose both the geometric belief-evidence route and semantic skill-token route. Null readouts set `ready_for_bswm=false`; they are audit/repair signals that say which skill was considered and which current-scene evidence is missing, not active BSWM conditioning.
+
+If required roles cannot be bound in the current scene, the skill emits a `NullSubskillReadout` rather than stale spatial evidence. A null readout still carries `experience_readout`, so DCEA/BSWM can see which past experience was considered and why the current scene is blocked. Optional `binding_confidence` values may be supplied by an external current-scene interface; Connor-Writer does not compute them from images.
 
 Active readouts require explicit current-scene relation evidence:
 
@@ -198,8 +234,10 @@ SubskillReadout:
 Readouts are durable runtime records. They are numbered by a deterministic content id:
 
 ```text
-readout_id = hash(skill_id, skill_version, context_signature, relation_evidence_signature, binding, status)
+readout_id = hash(skill_id, skill_version, generated_at, context_signature, relation_evidence_signature, binding, status, reason)
 ```
+
+The timestamp is part of the id because a readout is a generated runtime record, not a timeless scene key; trust and audit fields may legitimately change across read times. The persisted ledger enforces stability: appending the same `readout_id` with byte-equivalent canonical content is idempotent, but appending the same `readout_id` with different content raises a schema error. This prevents a downstream BSWM handoff from silently changing under an old stable id.
 
 Readout persistence follows a Hermes-style memory discipline: generated records are appended, later execution outcomes are appended separately, and only then are outcomes converted into new evidence. A certified skill is never mutated directly from a readout.
 

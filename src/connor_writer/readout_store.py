@@ -13,6 +13,7 @@ from .schema import (
     OutcomeRecord,
     SchemaError,
     SubskillReadout,
+    canonical_json,
     parse_subskill_readout,
 )
 
@@ -31,8 +32,13 @@ class ReadoutLedger:
         if isinstance(readout, dict):
             readout = parse_subskill_readout(readout)
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        existing_ids = {item.readout_id for item in self.iter_records()}
-        if readout.readout_id in existing_ids:
+        for existing in self.iter_records():
+            if existing.readout_id != readout.readout_id:
+                continue
+            if canonical_json(existing.to_dict()) != canonical_json(readout.to_dict()):
+                raise SchemaError(
+                    f"conflicting readout content for stable id: {readout.readout_id}"
+                )
             return readout.readout_id
         with self.file_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(readout.to_dict(), sort_keys=True, ensure_ascii=True))

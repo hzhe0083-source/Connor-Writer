@@ -233,6 +233,8 @@ class LifecycleTests(unittest.TestCase):
                     "trust_score",
                     "safety_metadata",
                     "audit_pointer",
+                    "experience_readout",
+                    "bswm_input",
                 },
             )
             self.assertEqual(payload["status"], "active")
@@ -258,12 +260,81 @@ class LifecycleTests(unittest.TestCase):
             self.assertGreater(payload["expected_belief_effect"]["progress_delta"], 0)
             self.assertGreater(payload["trust_score"], 0)
             self.assertTrue(payload["audit_pointer"]["evidence_ids"])
+            experience = payload["experience_readout"]
+            self.assertEqual(experience["memory_role"], "certified_skill_experience_summary")
+            self.assertEqual(experience["skill_name"], "ClearApproach")
+            self.assertEqual(experience["branch_mode"], "displace_context")
+            self.assertEqual(experience["relation_type"], "blocks")
+            self.assertEqual(experience["outcome_prior"]["support_n"], 3)
+            self.assertGreater(experience["outcome_prior"]["success_lcb"], 0)
+            self.assertGreater(experience["expected_belief_effect"]["progress_delta"], 0)
+            self.assertEqual(experience["current_scene_gate"]["status"], "active")
+            bswm_input = payload["bswm_input"]
+            self.assertEqual(bswm_input["schema_version"], "connor_writer.bswm_input.v1")
+            self.assertEqual(bswm_input["consumer"], "connor0.bswm")
+            self.assertTrue(bswm_input["bswm_input_id"].startswith("bswm_"))
+            self.assertEqual(
+                bswm_input["state_role"],
+                "planning_sufficient_evidence_conditioned_belief_input",
+            )
+            self.assertTrue(bswm_input["current_scene_gate"]["ready_for_bswm"])
+            self.assertTrue(bswm_input["current_scene_gate"]["active_routes"]["belief_evidence"])
+            self.assertTrue(bswm_input["current_scene_gate"]["active_routes"]["skill_token"])
+            self.assertEqual(
+                bswm_input["readout_ref"]["readout_id"],
+                payload["readout_id"],
+            )
+            self.assertEqual(
+                bswm_input["storage_contract"]["outcome_writeback_key"],
+                "readout_id",
+            )
+            self.assertTrue(
+                bswm_input["storage_contract"]["same_readout_id_requires_same_content"]
+            )
+            self.assertEqual(
+                bswm_input["belief_evidence"]["relation_evidence"]["source"],
+                "example_fixture",
+            )
+            self.assertEqual(
+                bswm_input["skill_conditioning"]["semantic_token"]["skill_name"],
+                "ClearApproach",
+            )
+            self.assertEqual(
+                bswm_input["branch_conditioning"]["branch_mode"],
+                "displace_context",
+            )
 
             null_readout = SkillReadoutBuilder().build(loaded, context={}, now="2026-07-09T00:03:30+00:00")
             null_payload = null_readout.to_dict()
             self.assertEqual(null_payload["status"], "null")
             self.assertTrue(null_payload["readout_id"].startswith("ro_"))
             self.assertIn("missing bound anchor", null_payload["reason"])
+            self.assertEqual(null_payload["experience_readout"]["branch_mode"], "displace_context")
+            self.assertEqual(null_payload["experience_readout"]["outcome_prior"]["support_n"], 3)
+            self.assertGreater(
+                null_payload["experience_readout"]["expected_belief_effect"]["progress_delta"],
+                0,
+            )
+            self.assertEqual(null_payload["experience_readout"]["current_scene_gate"]["status"], "null")
+            self.assertEqual(
+                null_payload["bswm_input"]["schema_version"],
+                "connor_writer.bswm_input.v1",
+            )
+            self.assertFalse(null_payload["bswm_input"]["current_scene_gate"]["ready_for_bswm"])
+            self.assertFalse(
+                null_payload["bswm_input"]["current_scene_gate"]["active_routes"][
+                    "belief_evidence"
+                ]
+            )
+            self.assertTrue(
+                null_payload["bswm_input"]["current_scene_gate"]["active_routes"]["audit_only"]
+            )
+            self.assertEqual(
+                null_payload["bswm_input"]["belief_evidence"][
+                    "required_relation_evidence"
+                ]["relation_type"],
+                "blocks",
+            )
 
             manual_context = {
                 "object_bindings": {
@@ -277,6 +348,11 @@ class LifecycleTests(unittest.TestCase):
             ).to_dict()
             self.assertEqual(manual_readout["status"], "null")
             self.assertIn("missing relation evidence", manual_readout["reason"])
+            self.assertEqual(manual_readout["experience_readout"]["relation_type"], "blocks")
+            self.assertEqual(
+                manual_readout["experience_readout"]["current_scene_gate"]["reason"],
+                manual_readout["reason"],
+            )
 
             strict_context = {
                 "object_bindings": {
@@ -332,6 +408,19 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(first_id, readout.readout_id)
             self.assertEqual(first_id, second_id)
             self.assertIsNotNone(readouts.get(first_id))
+            conflicting_payload = readout.to_dict()
+            conflicting_payload["bswm_input"] = dict(conflicting_payload["bswm_input"])
+            conflicting_payload["bswm_input"]["state_role"] = "changed_after_persistence"
+            with self.assertRaisesRegex(SchemaError, "conflicting readout content"):
+                readouts.append(conflicting_payload)
+
+            later_readout = SkillReadoutBuilder().build(
+                skill, context=context, now="2026-07-09T00:04:30+00:00"
+            )
+            self.assertNotEqual(later_readout.readout_id, first_id)
+            third_id = readouts.append(later_readout)
+            self.assertEqual(third_id, later_readout.readout_id)
+            self.assertEqual(len(list(readouts.iter_records())), 2)
 
             outcome = OutcomeRecord.from_dict(
                 {
@@ -427,6 +516,8 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(payload["status"], "active")
             self.assertEqual(payload["semantic_token"]["relation_type"], "blocks")
             self.assertEqual(payload["geometric_readout"]["relation_type"], "blocks")
+            self.assertEqual(payload["bswm_input"]["consumer"], "connor0.bswm")
+            self.assertTrue(payload["bswm_input"]["current_scene_gate"]["ready_for_bswm"])
 
             compiled = self.run_cli("compile-context", str(SAMPLE_CONTEXT))
             compiled_payload = json.loads(compiled.stdout)
